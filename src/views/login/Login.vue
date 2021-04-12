@@ -2,19 +2,27 @@
   <div class="wrapper">
     <img src="http://www.dell-lee.com/imgs/vue3/user.png" />
     <div class="input">
-      <input placeholder="请输入房间号"/>
+      <input placeholder="请输入房间号" v-model="roomData.room"/>
     </div>
     <div class="input">
-      <input placeholder="请输入房间密码"/>
+      <input placeholder="请输入房间密码" v-model="roomData.password"/>
     </div>
-    <div class="join-button">加入房间</div>
+    <div class="join-button" @click="handleJoin">加入房间</div>
     <div class="register-link">注册房间</div>
   </div>
 </template>
 
 <script>
+import { useJoinRoom } from '@/hooks/useJoinRoom'
 export default {
-  name: 'Login'
+  name: 'Login',
+  setup () {
+    // 加入房间逻辑，传入房间号和密码
+    const { roomData, handleJoin } = useJoinRoom('', '')
+    return {
+      roomData, handleJoin
+    }
+  }
 }
 </script>
 
