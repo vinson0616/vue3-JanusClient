@@ -1,13 +1,17 @@
 import { Janus } from 'janus-gateway'
 
-export const janusLibrary = (room, password, hasAudio, hasVideo, janusCallback) => {
+export const janusLibrary = (janusCallback) => {
   let janus = null
   let videoRoomHandle = null
   let localUserId = null
   let mypvtid = null
-  const maxFeedNumber = 12
+  const maxFeedNumber = 20
   const feeds = []
-  const userName = 'Vinson'
+  let roomNumber = ''
+  let roomPin = ''
+  let userName = 'Vinson'
+  let hasAudio = true
+  let hasVideo = true
   // 远程用户通道
   const addRemoteTrack = (id, display, audio, video) => {
     let remoteHandle = null
@@ -21,8 +25,8 @@ export const janusLibrary = (room, password, hasAudio, hasVideo, janusCallback) 
         // we wait for the plugin to send us an offer
         const subscribe = {
           request: 'join',
-          room: room,
-          pin: password,
+          room: roomNumber,
+          pin: roomPin,
           ptype: 'subscriber',
           feed: id,
           private_id: mypvtid
@@ -84,7 +88,7 @@ export const janusLibrary = (room, password, hasAudio, hasVideo, janusCallback) 
             // (obviously only works if the publisher offered them in the first place)
             media: { audioSend: false, videoSend: false }, // We want recvonly audio/video
             success: (jsep) => {
-              const body = { request: 'start', room: room }
+              const body = { request: 'start', room: roomNumber }
               remoteHandle.send({ message: body, jsep: jsep })
               console.log('remote answer successfully.')
             },
@@ -128,154 +132,203 @@ export const janusLibrary = (room, password, hasAudio, hasVideo, janusCallback) 
       }
     })
   }
-  Janus.init({
-    debug: false,
-    dependencies: Janus.useDefaultDependencies(),
-    callback: () => {
-      console.log('Janus Init successfully.')
-      janusCallback({
-        type: 'init',
-        errorCode: 0
-      })
-      if (!Janus.isWebrtcSupported()) {
-        console.log('No WebRTC support.')
+  // 本地Janus初始化
+  const addLocalTrack = (joinRoomCallback) => {
+    Janus.init({
+      debug: false,
+      dependencies: Janus.useDefaultDependencies(),
+      callback: () => {
+        console.log('Janus Init successfully.')
         janusCallback({
-          type: 'error',
-          errorCode: 1
+          type: 'init',
+          errorCode: 0
         })
-        return
-      }
-      janus = new Janus({
-        server: 'https://janus-dev.conxme.net/janusapimcu/janus',
-        success: () => {
-          // attach to videoRoom plugin
-          console.log('start to attach to videoRoom plugin')
-          janus.attach(
-            {
-              plugin: 'janus.plugin.videoroom',
-              opaqueId: `videoroom-local-${userName}-${Janus.randomString(12)}`,
-              success: pluginHandle => {
-                console.log('pluginHandle: ', pluginHandle)
-                janusCallback({
-                  type: 'initHandle',
-                  errorCode: 0,
-                  content: pluginHandle
-                })
-                videoRoomHandle = pluginHandle
-              },
-              error: error => {
-                Janus.error(error)
-              },
-              consentDialog: on => {
-                console.log(`local consentDialog -> on: ${on}, userName: ${userName}`)
-              },
-              iceState: state => {
-                console.log(`local iceState -> state: ${state}, userName: ${userName}`)
-              },
-              mediaState: (medium, on) => {
-                console.log(`local mediaState -> medium: ${medium}, on: ${on}, userName: ${userName}`)
-              },
-              webrtcState: on => {
-                console.log(`local webrtcState -> on: ${on}, userName: ${userName}`)
-              },
-              onmessage: (msg, jsep) => {
-                const event = msg.videoroom
-                if (event) {
-                  switch (event) {
-                    case 'joined':
-                      localUserId = msg.id
-                      mypvtid = msg.private_id
-                      console.log(`joined -> id: ${localUserId} name: ${userName}`)
-                      // 加入成功后，创建offer
-                      videoRoomHandle.createOffer(
-                        {
-                          trickle: true,
-                          media: { audioRecv: false, videoRecv: false, audioSend: hasAudio, videoSend: hasVideo },
-                          simulcast: true,
-                          simulcast2: true,
-                          success: jsep => {
-                            const publish = { request: 'configure', audio: true, video: true }
-                            videoRoomHandle.send({ message: publish, jsep: jsep })
-                            console.log(`create offer -> id: ${localUserId} name: ${userName}`)
-                            // 初始状态房间的人数，并分别添加通道
-                            if (msg.publishers) {
-                              console.log('init publishers: ', msg.publishers)
-                              for (const publisher in msg.publishers) {
-                                const pId = msg.publishers[publisher].id
-                                const pUserName = msg.publishers[publisher].display
-                                const pAudio = msg.publishers[publisher].audio_codec
-                                const pVideo = msg.publishers[publisher].video_codec
-                                console.log(`init publisher: pId: ${pId}, pUserName: ${pUserName}, pAudio: ${pAudio}, pVideo: ${pVideo}`)
-                                addRemoteTrack(pId, pUserName, pAudio, pVideo)
-                              }
-                            }
-                          },
-                          error: err => {
-                            console.log('create offer error: ', err)
-                          }
-                        }
-                      )
-                      break
-                    case 'talking':
-                    case 'stopped-talking':
-                      break
-                    case 'event':
-                      // any new feed to attach to ?
-                      console.log('publishers: ', msg.publishers)
-                      if (msg.publishers) {
-                        for (const publisher in msg.publishers) {
-                          const pId = msg.publishers[publisher].id
-                          const pUserName = msg.publishers[publisher].display
-                          const pAudio = msg.publishers[publisher].audio_codec
-                          const pVideo = msg.publishers[publisher].video_codec
-                          console.log(`publisher: pId: ${pId}, pUserName: ${pUserName}, pAudio: ${pAudio}, pVideo: ${pVideo}`)
-                          addRemoteTrack(pId, pUserName, pAudio, pVideo)
-                        }
-                      }
-                      break
-                  }
-                  if (jsep) {
-                    videoRoomHandle.handleRemoteJsep({ jsep: jsep })
-                  }
-                }
-              },
-              onlocalstream: stream => {
-                console.log(`local onlocalstream -> stream: ${stream}, userName: ${userName}`)
-                const user = {
-                  userName: userName,
-                  stream: stream
-                }
-                janusCallback({
-                  type: 'addUser',
-                  errorCode: 0,
-                  content: user
-                })
-              },
-              onremotestream: stream => {
-                console.log(`local onremotestream -> stream: ${stream}, userName: ${userName}`)
-              },
-              oncleanup: () => {
-                console.log(`local oncleanup -> userName: ${userName}`)
-              }
-            }
-          )
-        },
-        error: err => {
-          console.log(`init -> ${err}`)
+        if (!Janus.isWebrtcSupported()) {
+          console.log('No WebRTC support.')
           janusCallback({
             type: 'error',
-            errorCode: 2
+            errorCode: 1
           })
-          janus = null
-        },
-        destroy: () => {
-          console.log('janus destroyed!')
-          janus = null
+          return
         }
-      })
+        janus = new Janus({
+          server: 'https://janus-dev.conxme.net/janusapimcu/janus',
+          success: () => {
+            // attach to videoRoom plugin
+            console.log('start to attach to videoRoom plugin')
+            janus.attach(
+              {
+                plugin: 'janus.plugin.videoroom',
+                opaqueId: `videoroom-local-${userName}-${Janus.randomString(12)}`,
+                success: pluginHandle => {
+                  console.log('pluginHandle: ', pluginHandle)
+                  janusCallback({
+                    type: 'initHandle',
+                    errorCode: 0,
+                    content: pluginHandle
+                  })
+                  videoRoomHandle = pluginHandle
+                  joinRoomCallback()
+                },
+                error: error => {
+                  Janus.error(error)
+                },
+                consentDialog: on => {
+                  console.log(`local consentDialog -> on: ${on}, userName: ${userName}`)
+                },
+                iceState: state => {
+                  console.log(`local iceState -> state: ${state}, userName: ${userName}`)
+                },
+                mediaState: (medium, on) => {
+                  console.log(`local mediaState -> medium: ${medium}, on: ${on}, userName: ${userName}`)
+                },
+                webrtcState: on => {
+                  console.log(`local webrtcState -> on: ${on}, userName: ${userName}`)
+                },
+                onmessage: (msg, jsep) => {
+                  const event = msg.videoroom
+                  if (event) {
+                    switch (event) {
+                      case 'joined':
+                        localUserId = msg.id
+                        mypvtid = msg.private_id
+                        console.log(`joined -> id: ${localUserId} name: ${userName}`)
+                        // 加入成功后，创建offer
+                        videoRoomHandle.createOffer(
+                          {
+                            trickle: true,
+                            media: { audioRecv: false, videoRecv: false, audioSend: hasAudio, videoSend: hasVideo },
+                            simulcast: true,
+                            simulcast2: true,
+                            success: jsep => {
+                              const publish = { request: 'configure', audio: true, video: true }
+                              videoRoomHandle.send({ message: publish, jsep: jsep })
+                              console.log(`create offer -> id: ${localUserId} name: ${userName}`)
+                              // 初始状态房间的人数，并分别添加通道
+                              if (msg.publishers) {
+                                console.log('init publishers: ', msg.publishers)
+                                for (const publisher in msg.publishers) {
+                                  const pId = msg.publishers[publisher].id
+                                  const pUserName = msg.publishers[publisher].display
+                                  const pAudio = msg.publishers[publisher].audio_codec
+                                  const pVideo = msg.publishers[publisher].video_codec
+                                  console.log(`init publisher: pId: ${pId}, pUserName: ${pUserName}, pAudio: ${pAudio}, pVideo: ${pVideo}`)
+                                  addRemoteTrack(pId, pUserName, pAudio, pVideo)
+                                }
+                              }
+                            },
+                            error: err => {
+                              console.log('create offer error: ', err)
+                            }
+                          }
+                        )
+                        break
+                      case 'talking':
+                      case 'stopped-talking':
+                        break
+                      case 'event':
+                        // any new feed to attach to ?
+                        console.log('publishers: ', msg.publishers)
+                        if (msg.publishers) {
+                          for (const publisher in msg.publishers) {
+                            const pId = msg.publishers[publisher].id
+                            const pUserName = msg.publishers[publisher].display
+                            const pAudio = msg.publishers[publisher].audio_codec
+                            const pVideo = msg.publishers[publisher].video_codec
+                            console.log(`publisher: pId: ${pId}, pUserName: ${pUserName}, pAudio: ${pAudio}, pVideo: ${pVideo}`)
+                            addRemoteTrack(pId, pUserName, pAudio, pVideo)
+                          }
+                        }
+                        if (msg.error) {
+                          console.error(msg.error)
+                          janusCallback({
+                            type: 'error',
+                            errorCode: 100,
+                            content: msg.error
+                          })
+                        }
+                        break
+                    }
+                    if (jsep) {
+                      videoRoomHandle.handleRemoteJsep({ jsep: jsep })
+                    }
+                  }
+                },
+                onlocalstream: stream => {
+                  console.log(`local onlocalstream -> stream: ${stream}, userName: ${userName}`)
+                  const user = {
+                    userName: userName,
+                    stream: stream
+                  }
+                  janusCallback({
+                    type: 'addUser',
+                    errorCode: 0,
+                    content: user
+                  })
+                },
+                onremotestream: stream => {
+                  console.log(`local onremotestream -> stream: ${stream}, userName: ${userName}`)
+                },
+                oncleanup: () => {
+                  console.log(`local oncleanup -> userName: ${userName}`)
+                  janusCallback({
+                    type: 'destoryed',
+                    errorCode: 0
+                  })
+                }
+              }
+            )
+          },
+          error: err => {
+            console.log(`init -> ${err}`)
+            janusCallback({
+              type: 'error',
+              errorCode: 2
+            })
+            janus = null
+          },
+          destroy: () => {
+            console.log('janus destroyed!')
+            janus = null
+          }
+        })
+      }
+    })
+  }
+  // 加入房间
+  const joinRoom = (room, password, name, audio, video) => {
+    roomNumber = room
+    roomPin = password
+    userName = name
+    hasAudio = audio
+    hasVideo = video
+    addLocalTrack(() => {
+      // join the room
+      const join = {
+        request: 'join',
+        room: room,
+        pin: password,
+        ptype: 'publisher',
+        display: userName
+      }
+      console.log(`room: ${join.room}, userName: ${join.display}`)
+      videoRoomHandle.send({ message: join })
+    })
+  }
+  // 离开房间
+  const leaveRoom = () => {
+    if (janus) {
+      janus.destroy(
+        {
+          cleanupHandles: true,
+          notifyDestroyed: true
+        }
+      )
     }
-  })
+  }
   return {
-    videoRoomHandle
+    videoRoomHandle,
+    joinRoom,
+    leaveRoom
   }
 }

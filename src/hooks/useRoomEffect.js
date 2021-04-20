@@ -1,55 +1,65 @@
-import { reactive } from 'vue'
+import { ref, reactive } from 'vue'
 import { useStore } from 'vuex'
-import { useRouter } from 'vue-router'
 import { janusLibrary } from '@/utils/janusLibrary'
 
 export const useRoomEffect = () => {
-  const roomData = reactive({ room: '1234', password: '1234', userName: 'Vinson' })
-  const router = useRouter()
+  const isLoading = ref(false)
+  const isJoined = ref(false)
+  const userList = reactive([])
+  const errMsg = ref('')
   const store = useStore()
+  let index = -1
   const joinCallback = (data) => {
     console.log(data)
     switch (data.type) {
       case 'initHandle':
-        router.push({ name: 'Home', params: roomData })
+        errMsg.value = ''
         store.commit('changeVideoHandle', data.content)
         break
+      case 'destoryed':
+        setTimeout(() => {
+          isJoined.value = false
+          isLoading.value = false
+          userList.splice(0, userList.length)
+        }, 1000)
+        break
       case 'addUser':
+        isJoined.value = true
+        isLoading.value = false
+        if (userList.findIndex(c => c.userName === data.content.userName) === -1) {
+          userList.push(data.content)
+        }
+        // userList.push(data.content)
+        // userList.push(data.content)
+        break
       case 'removeUser':
-        store.commit(data.type, data.content)
+        index = userList.findIndex(c => c.userName === data.content.userName)
+        if (index !== -1) {
+          userList.splice(index, 1)
+        }
+        break
+      case 'error':
+        isLoading.value = false
+        errMsg.value = data.content
         break
     }
   }
-  const handleJoinRoom = () => {
-    janusLibrary(roomData.room, roomData.password, false, true, joinCallback)
+  const joinRoomHandle = (roomData) => {
+    console.log('JoinRoom: ', roomData)
+    isLoading.value = true
+    joinRoom(roomData.room, roomData.password, roomData.userName, false, true)
   }
-  const JoinRoom = () => {
-    console.log(roomData.room, roomData.password, roomData.userName)
-    console.log(window.videoRoomHandle)
+  const leaveRoomHandle = () => {
+    isLoading.value = true
+    leaveRoom()
   }
+  const { joinRoom, leaveRoom } = janusLibrary(joinCallback)
   return {
-    roomData,
-    JoinRoom,
-    handleJoinRoom
+    isJoined,
+    errMsg,
+    isLoading,
+    userList,
+    joinRoomHandle,
+    leaveRoomHandle
   }
 }
-// // 加入房间
-// export const useJoinRoom = (room, password) => {
-//   const roomData = reactive({ room: room, password: password })
-//   const router = useRouter()
-//   const joinCallback = (data) => {
-//     console.log(data)
-//     if (data.type === 'initHandle') {
-//       window.videoRoomHandle = data.content
-//       router.push({ name: 'Home' })
-//     }
-//   }
-//   const handleJoin = () => {
-//     console.log(roomData.room, roomData.password)
-//     janusLibrary(roomData.room, roomData.password, joinCallback)
-//   }
-//   return {
-//     roomData,
-//     handleJoin
-//   }
-// }

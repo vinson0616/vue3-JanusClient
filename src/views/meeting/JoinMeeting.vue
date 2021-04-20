@@ -1,6 +1,5 @@
 <template>
-  <div class="login" v-loading="isLoading">
-    <div class="loginWrapper">
+  <div class="JoinMeeting">
       <div class="loginContainer">
         <h1 class="Login_h1">
           <span>Con</span>
@@ -22,19 +21,28 @@
           </div>
         </form>
       </div>
-    </div>
   </div>
 </template>
 
 <script>
-import { useRoomEffect } from '@/hooks/useRoomEffect'
+import { reactive, ref } from 'vue'
 export default {
-  name: 'Login',
-  setup () {
-    // 加入房间逻辑，传入房间号和密码
-    const { isLoading, dataInvalid, roomData, handleJoinRoom } = useRoomEffect()
+  name: 'JoinMeeting',
+  emits: ['JoinRoom'],
+  setup (props, context) {
+    const dataInvalid = ref('')
+    const roomData = reactive({
+      userName: '',
+      room: '',
+      password: ''
+    })
+    const handleJoinRoom = () => {
+      dataInvalid.value = (!roomData.room || !roomData.password || !roomData.userName) ? 'was-validated' : ''
+      if (!dataInvalid.value) {
+        context.emit('JoinRoom', roomData)
+      }
+    }
     return {
-      isLoading,
       dataInvalid,
       roomData,
       handleJoinRoom
@@ -45,27 +53,20 @@ export default {
 
 <style lang="scss" scoped>
 @import "../../style/design";
-.login {
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  right: 0;
-  .loginWrapper {
-    margin: 30vh auto 0;
-    width: 30rem;
-    background: $gray-05;
-    border: 1px solid $gray-03;
-    border-radius: 8px;
-    box-shadow: 0 10px 12px 0 rgba(0, 0, 0, 0.08);
-    .loginContainer {
-      margin: 20px auto;
-      width: 22rem;
-      .Login_h1 {
-        text-align: center;
-        font-size: 3rem;
-        color: $gray-01;
-      }
+.JoinMeeting {
+  width: 30rem;
+  height: auto;
+  background: $gray-05;
+  border: 1px solid $gray-03;
+  border-radius: 8px;
+  box-shadow: 0 10px 12px 0 rgba(0, 0, 0, 0.08);
+  .loginContainer {
+    margin: 20px auto;
+    width: 22rem;
+    .Login_h1 {
+      text-align: center;
+      font-size: 3rem;
+      color: $gray-01;
     }
   }
 }

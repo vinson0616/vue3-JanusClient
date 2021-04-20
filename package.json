@@ -13,7 +13,9 @@
   },
   "main": "background.js",
   "dependencies": {
+    "bootstrap": "^5.0.0-beta3",
     "core-js": "^3.6.5",
+    "element-plus": "^1.0.2-beta.40",
     "exports-loader": "^1.1.1",
     "janus-gateway": "git://github.com/meetecho/janus-gateway.git",
     "normalize.css": "^8.0.1",
