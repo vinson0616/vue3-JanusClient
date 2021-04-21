@@ -1,6 +1,11 @@
 <template>
   <div class="meeting" v-loading="isLoading">
     <div class="content h-100 w-100"  v-if="isJoined">
+      <div class="topBar d-flex justify-content-between align-items-center ps-2 pe-2">
+        <span> ConX Meeting</span>
+        <span> 1234 </span>
+        <span>00:00:01</span>
+      </div>
       <div class="layout">
         <video-layout :users="userList"/>
       </div>
@@ -67,6 +72,11 @@ export default {
   .content {
     display: flex;
     flex-direction: column;
+    .topBar {
+      height: 40px;
+      background: $main-green;
+      color: $gray-05;
+    }
     .layout {
       flex: 1;
     }

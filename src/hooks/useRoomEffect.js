@@ -26,11 +26,10 @@ export const useRoomEffect = () => {
       case 'addUser':
         isJoined.value = true
         isLoading.value = false
-        if (userList.findIndex(c => c.userName === data.content.userName) === -1) {
-          userList.push(data.content)
-        }
-        // userList.push(data.content)
-        // userList.push(data.content)
+        // if (userList.findIndex(c => c.userName === data.content.userName) === -1) {
+        //   userList.push(data.content)
+        // }
+        userList.push(data.content)
         break
       case 'removeUser':
         index = userList.findIndex(c => c.userName === data.content.userName)

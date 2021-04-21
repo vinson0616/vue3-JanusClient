@@ -1,7 +1,7 @@
 <template>
 <div class="VideoLayout h-100 w-100">
   <div class="itemRow" :style="{ height: users.length > 1 ? '50%' : '100%' }">
-    <div class="videoItem d-flex justify-content-center" v-for="item in users.slice(0, Math.ceil(users.length / 2))" :key="item">
+    <div class="videoItem" v-for="item in users.slice(0, Math.ceil(users.length / 2))" :key="item">
       <video autoplay :srcObject="item.stream"/>
       <div class="info">
         <img src="@/assets/Icons_Profile.svg" alt="catpure" />
@@ -10,7 +10,7 @@
     </div>
   </div>
   <div class="itemRow" style="height: 50%" v-if="users.length > 1">
-    <div class="videoItem d-flex justify-content-center" v-for="item in users.slice(Math.ceil(users.length / 2), users.length)" :key="item">
+    <div class="videoItem" v-for="item in users.slice(Math.ceil(users.length / 2), users.length)" :key="item">
       <video autoplay :srcObject="item.stream"/>
       <div class="info">
         <img src="@/assets/Icons_Profile.svg" alt="catpure" />
@@ -44,11 +44,9 @@ export default {
     .videoItem {
       flex: 1;
       background: #B7B7B7;
-      margin-right: 1px;
-      margin-bottom: 1px;
       position: relative;
       video {
-        width: auto;
+        width: 100%;
         height: 100%;
         object-fit: contain;
         background-color: black;
@@ -62,8 +60,8 @@ export default {
         color: white;
         width: auto;
         height: 30px;
-        bottom: 0;
-        left: 0;
+        bottom: 5px;
+        left: 48%;
       }
     }
   }
