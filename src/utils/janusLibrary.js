@@ -3,6 +3,7 @@ import { Janus } from 'janus-gateway'
 export const janusLibrary = (janusCallback) => {
   let janus = null
   let videoRoomHandle = null
+  let audioHandle = null
   let localUserId = null
   let mypvtid = null
   const maxFeedNumber = 20
@@ -12,6 +13,9 @@ export const janusLibrary = (janusCallback) => {
   let userName = 'Vinson'
   let hasAudio = true
   let hasVideo = true
+  let audioUp = false
+  let clientId = null
+  const roomHost = false
   // 远程用户通道
   const addRemoteTrack = (id, display, audio, video) => {
     let remoteHandle = null
@@ -156,6 +160,7 @@ export const janusLibrary = (janusCallback) => {
           success: () => {
             // attach to videoRoom plugin
             console.log('start to attach to videoRoom plugin')
+            clientId = Janus.randomString(12)
             janus.attach(
               {
                 plugin: 'janus.plugin.videoroom',
@@ -184,6 +189,10 @@ export const janusLibrary = (janusCallback) => {
                 },
                 webrtcState: on => {
                   console.log(`local webrtcState -> on: ${on}, userName: ${userName}`)
+                  if (on) {
+                    console.log('start to audioBridge plugin.')
+                    audioBridgeTrack()
+                  }
                 },
                 onmessage: (msg, jsep) => {
                   const event = msg.videoroom
@@ -295,6 +304,220 @@ export const janusLibrary = (janusCallback) => {
       }
     })
   }
+  // mcu audio plugin
+  const audioBridgeTrack = () => {
+    const audioOpaqueId = `${roomNumber}-audiobridge-${userName}-${Janus.randomString(12)}`
+    janus.attach(
+      {
+        plugin: 'janus.plugin.audiobridge',
+        opaqueId: audioOpaqueId,
+        success: pluginHandle => {
+          audioHandle = pluginHandle
+          console.log(`audiobridge -> attach success! room_host: ${roomHost}, audioHandle: `, audioHandle)
+          if (roomHost) {
+            createAudioBridge()
+          } else {
+            joinAudioBridge()
+          }
+        },
+        error: error => {
+          console.error(error)
+        },
+        consentDialog: on => {
+          console.log(`audioBridgeTrack -> Consent dialog : ${on}`)
+        },
+        iceState: state => {
+          console.log(`audioBridgeTrack -> iceState: ${state}`)
+        },
+        mediaState: (media, on) => {
+          console.log(`audioBridgeTrack -> mediaState: ${media}, on: ${on}`)
+        },
+        webrtcState: on => {
+          console.log(`audioBridgeTrack -> webrtcState: ${on}`)
+        },
+        onmessage: (msg, jsep) => {
+          const event = msg.audiobridge
+          if (event) {
+            if (event === 'joined') {
+              // Successfully joined, negotiate WebRTC now
+              if (msg.id) {
+                if (!audioUp) {
+                  audioUp = true
+                  // Publish our stream
+                  audioHandle.createOffer({
+                    media: { video: false }, // This is an audio only room
+                    success: jsep => {
+                      Janus.debug('Got SDP!', jsep)
+                      const publish = { request: 'configure', muted: false }
+                      audioHandle.send({ message: publish, jsep: jsep })
+                    },
+                    error: error => {
+                      Janus.error('WebRTC error:', error)
+                    }
+                  })
+                }
+              }
+
+              // Any room participant?
+              if (msg.participants) {
+                const list = msg.participants
+                for (const f in list) {
+                  const muted = list[f].muted
+                  const display = list[f].display
+                  janusCallback({
+                    type: 'addUser',
+                    errorCode: 0,
+                    content: {
+                      userName: display,
+                      muted: muted
+                    }
+                  })
+                  if (muted) {
+                    janusCallback({
+                      type: 'mutedChange',
+                      errorCode: 0,
+                      content: {
+                        userName: display,
+                        muted: muted
+                      }
+                    })
+                  }
+                }
+                console.log(`audioBridgeTrack -> participants: ${list.length}`)
+              }
+            } else if (event === 'roomchanged') {
+            } else if (event === 'destroyed') {
+              console.log('audioBridgeTrack -> audio room has been destroyed')
+            } else if (event === 'talking' || event === 'stopped-talking') {
+              const username = JSON.parse(atob(msg.id)).username
+              if (event === 'talking') {
+                // talking
+                janusCallback({
+                  type: 'talkingChange',
+                  errorCode: 0,
+                  content: {
+                    userName: username,
+                    talking: true
+                  }
+                })
+                console.log('talking: ', username)
+              } else {
+                // stop talking
+                janusCallback({
+                  type: 'talkingChange',
+                  errorCode: 0,
+                  content: {
+                    userName: username,
+                    talking: false
+                  }
+                })
+                console.log('stop talking: ', username)
+              }
+            } else if (event === 'event') {
+              if (msg.participants) {
+                const list = msg.participants
+                for (const f in list) {
+                  const muted = list[f].muted
+                  const display = list[f].display
+                  janusCallback({
+                    type: 'mutedChange',
+                    errorCode: 0,
+                    content: {
+                      userName: display,
+                      muted: muted
+                    }
+                  })
+                }
+              } else if (msg.error) {
+              }
+              // Any new feed to attach to?
+              if (msg.leaving) {
+                // // One of the participants has gone away?
+                // const leaving = msg["leaving"];
+                // const leaving_obj = JSON.parse(atob(leaving));
+                // console.log('Leaving: ', leaving_obj)
+              }
+            }
+          }
+          if (jsep) {
+            audioHandle.handleRemoteJsep({ jsep: jsep })
+          }
+        },
+        onlocalstream: stream => {
+          console.log('audioBridgeTrack -> onlocalstream', stream)
+        },
+        onremotestream: stream => {
+          janusCallback({
+            type: 'mcuAudio',
+            errorCode: 0,
+            content: stream
+          })
+        },
+        oncleanup: stream => {
+          Janus.log('IFC myclient ::: audioBridgeTrack:attach:oncleanup() ::: Got a cleanup notification :::')
+          audioUp = false
+        }
+      })
+  }
+  // 加入MCU audio plugin
+  const joinAudioBridge = () => {
+    console.log('joinAudioBridge')
+    const audioIdObj = {
+      username: userName,
+      uniq_id: clientId
+    }
+    const join = {
+      request: 'join',
+      room: roomNumber,
+      pin: roomPin,
+      display: userName,
+      muted: false,
+      codec: 'opus',
+      quality: 4,
+      id: btoa(JSON.stringify(audioIdObj))
+    }
+    audioHandle.send({
+      message: join,
+      success: data => {
+        console.log(`joinAudioBridge -> Room: ${this.room}`, data)
+      },
+      error: error => {
+        console.log('joinAudioBridge -> error: ', error)
+      }
+    })
+  }
+  // 创建MCU audio plugin
+  const createAudioBridge = () => {
+    console.log('createAudioBridge')
+  }
+  // mute audio
+  const audioMuted = (muted) => {
+    if (audioHandle) {
+      audioHandle.send({ message: { request: 'configure', muted: muted } })
+      janusCallback({
+        type: 'mutedChange',
+        errorCode: 0,
+        content: {
+          userName: userName,
+          muted: muted
+        }
+      })
+    }
+  }
+  // mute video
+  const videoMuted = (muted) => {
+    if (videoRoomHandle) {
+      if (muted) {
+        videoRoomHandle.muteVideo()
+      } else {
+        videoRoomHandle.unmuteVideo()
+      }
+    }
+  }
+  // share
+  const startShare = () => {
+    alert('test')
+  }
   // 加入房间
   const joinRoom = (room, password, name, audio, video) => {
     roomNumber = room
@@ -329,6 +552,9 @@ export const janusLibrary = (janusCallback) => {
   return {
     videoRoomHandle,
     joinRoom,
-    leaveRoom
+    leaveRoom,
+    audioMuted,
+    videoMuted,
+    startShare
   }
 }

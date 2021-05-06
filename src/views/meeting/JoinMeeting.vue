@@ -8,16 +8,16 @@
         </h1>
         <form class="mt-4" :class="dataInvalid" novalidate>
           <div class="mb-4 row">
-            <input type="text" class="form-control" required placeholder="请输入用户名" v-model="roomData.userName" @keydown.enter="handleJoinRoom"/>
+            <input type="text" class="form-control" required placeholder="Please input userName" v-model="roomData.userName" @keydown.enter="handleJoinRoom"/>
           </div>
           <div class="mb-4 row">
-            <input type="text" class="form-control" required placeholder="请输入房间号" v-model="roomData.room" @keydown.enter="handleJoinRoom"/>
+            <input type="text" class="form-control" required placeholder="Please input room number" v-model="roomData.room" @keydown.enter="handleJoinRoom"/>
           </div>
           <div class="mb-4 row">
-            <input type="password" class="form-control" required placeholder="请输入房间密码" v-model="roomData.password" @keydown.enter="handleJoinRoom"/>
+            <input type="password" class="form-control" required placeholder="Please input room password" v-model="roomData.password" @keydown.enter="handleJoinRoom"/>
           </div>
           <div class="mb-4 row">
-            <el-button type="primary" @click="handleJoinRoom" >开始会议</el-button>
+            <el-button type="primary" @click="handleJoinRoom" >Start Meeting</el-button>
           </div>
         </form>
       </div>
